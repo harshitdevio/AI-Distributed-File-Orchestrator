@@ -1,10 +1,38 @@
 services:
-  organiser:
-    build: ./organiser
+  nats-server:
+    image: nats:latest
+    container_name: nats-broker
+    command: ["-m", "8222"] 
     ports:
-      - "8080:8080"
+      - "4222:4222"  
+      - "8222:8222"  
+    networks:
+      - app-net
 
-  LLM:
-    build: ./python
-    ports:
-      - "8000:8000"
+  # 2. Python Consumers (Fires up 3 copies running 'poetry run python main.py')
+  python-classifier:
+    build:
+      context: ./python
+    environment:
+      - NATS_URL=nats://nats-server:4222
+    depends_on:
+      - nats-server
+    deploy:
+      replicas: 3
+    networks:
+      - app-net
+
+  # 3. Go Producer (Runs your compiled binary)
+  go-organiser:
+    build:
+      context: ./organiser      # Points to folder with your Go Dockerfile
+    environment:
+      - NATS_URL=nats://nats-server:4222
+    depends_on:
+      - nats-server
+    networks:
+      - app-net
+
+networks:
+  app-net:
+    driver: bridge
